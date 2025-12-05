@@ -7,7 +7,7 @@ from game.checkers import Checkers
 from gui.boardview import BoardView
 from gui.filelist import FileList
 from gui.playercontroller import PlayerController
-from gui.alphabetacontroller import AlphaBetaController
+from gui.minimaxcontroller import MinimaxController
 from parsing.PDN import PDNReader, PDNWriter, board_to_PDN_ready
 from parsing.migrate import RCF2PDN, build_move_annotation_pairs
 from util.globalconst import BLACK, WHITE, TITLE, VERSION, KING, MAN, PROGRAM_TITLE, TRAINING_DIR
@@ -36,11 +36,11 @@ class GameManager(object):
 
     def set_controllers(self):
         if self.num_players == 0:
-            self.controller1 = AlphaBetaController(model=self.model,
+            self.controller1 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
                                                    end_turn_event=self.turn_finished)
-            self.controller2 = AlphaBetaController(model=self.model,
+            self.controller2 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
                                                    end_turn_event=self.turn_finished)
@@ -49,7 +49,7 @@ class GameManager(object):
             self.controller1 = PlayerController(model=self.model,
                                                 view=self.view,
                                                 end_turn_event=self.turn_finished)
-            self.controller2 = AlphaBetaController(model=self.model,
+            self.controller2 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
                                                    end_turn_event=self.turn_finished)

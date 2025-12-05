@@ -4,9 +4,10 @@ import multiprocessing
 import time
 from base.controller import Controller
 from util.globalconst import OUTLINE_COLOR, DARK_SQUARES, MAX_DEPTH
+import ai.parallel_search as parallel_search
+from pyspark.sql import SparkSession
 
-
-class AlphaBetaController(Controller):
+class MinimaxController(Controller):
     def __init__(self, **props):
         self._model = props['model']
         self._view = props['view']
@@ -99,6 +100,11 @@ def longest_of(moves):
 def calc_move(model, search_time, term_event, child_conn):
     term_event.clear()
     captures = model.captures_available()
+    spark_session = SparkSession.builder \
+            .appName("AlphaBetaSearch") \
+            .config('spark.driver.memory', '8g') \
+            .config('spark.executor.memory', '1g') \
+            .getOrCreate()
     if captures:
         time.sleep(0.7)
         move = longest_of(captures)
@@ -106,21 +112,23 @@ def calc_move(model, search_time, term_event, child_conn):
         depth = 0
         start_time = time.time()
         curr_time = start_time
+        rem_time = search_time
         model_copy = copy.deepcopy(model)
         while 1:
             depth += 1
-            move = games.alphabeta_search(model_copy.curr_state,
+            move = parallel_search.parallel_minimax(model_copy.curr_state,
                                           model_copy,
-                                          depth)
+                                          spark_session,
+                                          d=depth)
             checkpoint = curr_time
             curr_time = time.time()
-            rem_time = search_time - (curr_time - checkpoint)
+            rem_time -= curr_time - checkpoint
+            print(rem_time, "remaining after depth", depth)
             if term_event.is_set():  # a signal means terminate
                 term_event.clear()
                 move = None
                 break
-            if (curr_time - start_time > search_time or
-               ((curr_time - checkpoint) * 2) > rem_time or
-               depth > MAX_DEPTH):
+            if rem_time < 0 or depth == 4:
                 break
+    spark_session.stop()
     child_conn.send(move)
