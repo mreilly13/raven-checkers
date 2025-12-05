@@ -31,6 +31,6 @@ if config.ENABLE_METRICS:
     print("Performance metrics: ENABLED")
 print()
 
-# Start the game
-import main
-main.start()
+# Start the game - use correct module name
+from gui import start_gui
+start_gui.main()
