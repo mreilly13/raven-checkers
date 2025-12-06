@@ -21,6 +21,9 @@ Raven is a checkers game program, for one or two players. While there are exampl
 ## Running the program
 
 * From a command prompt inside the project folder, type `pdm run python main.py`.
+* To print performance statistics to the console, include the command line argument `-m`: `pdm run python main.py -m`
+* To use the parallelized AI agent search built in pyspark, include the command line argument `-p`: `pdm run python main.py -p`
+* to print performance statistics and use parallelization, use both arguments: `pdm run python main.py -p -m`
 
 ## Running unit tests
 
