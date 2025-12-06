@@ -29,6 +29,8 @@ class GameManager(object):
         self.num_players = 1
         self.controller1 = None
         self.controller2 = None
+        self.search = props['search']
+        self.metrics = props['metrics']
         self.set_controllers()
         # noinspection PyUnresolvedReferences
         self.controller1.start_turn()
@@ -39,11 +41,15 @@ class GameManager(object):
             self.controller1 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
-                                                   end_turn_event=self.turn_finished)
+                                                   end_turn_event=self.turn_finished,
+                                                   search=self.search,
+                                                   display_metrics=self.metrics)
             self.controller2 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
-                                                   end_turn_event=self.turn_finished)
+                                                   end_turn_event=self.turn_finished,
+                                                   search=self.search,
+                                                   display_metrics=self.metrics)
         elif self.num_players == 1:
             # assumption here is that Black is the player
             self.controller1 = PlayerController(model=self.model,
@@ -52,7 +58,9 @@ class GameManager(object):
             self.controller2 = MinimaxController(model=self.model,
                                                    view=self.view,
                                                    searchtime=self.think_time,
-                                                   end_turn_event=self.turn_finished)
+                                                   end_turn_event=self.turn_finished,
+                                                   search=self.search,
+                                                   display_metrics=self.metrics)
             # swap controllers if White is selected as the player
             if self.player_color == WHITE:
                 self.controller1, self.controller2 = self.controller2, self.controller1

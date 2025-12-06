@@ -1,37 +1,33 @@
-import copy
 from ai.utils import infinity, argmax, argmax_random_tie, num_or_str, Dict, update
-from ai.utils import if_, Struct, abstract
-from pyspark.sql import SparkSession, types, functions as sf
-from pyspark import RDD
+from pyspark.sql import types, functions as sf
 from pickle import dumps, loads
 
+# naive minimax implementation for comparison
 def naive_minimax(state, game, spark, d=4, cutoff_test=None, eval_fn=None):
     """Search game to determine best action.
     This version cuts off search and uses an evaluation function."""
     player = game.to_move(state)
-    stats = {"nodes": 0,
-             "depth": 0}
+
+    stats = {"nodes": 0, "depth": d}
 
     def max_value(st, depth):
         if cutoff_test(st, depth):
+            stats["nodes"] += 1
             return eval_fn(st)
         v = -infinity
         successor = game.successors(st)
-        stats["depth"] = max(stats["depth"], depth)
-        for (a, s) in successor:
+        for _, s in successor:
             v = max(v, min_value(loads(dumps(s)), depth+1))
-            stats["nodes"] += 1
         return v
 
     def min_value(st, depth):
         if cutoff_test(st, depth):
+            stats["nodes"] += 1
             return eval_fn(st)
         v = infinity
         successor = game.successors(st)
-        stats["depth"] = max(stats["depth"], depth)
-        for (a, s) in successor:
+        for _, s in successor:
             v = min(v, max_value(loads(dumps(s)), depth+1))
-            stats["nodes"] += 1
         return v
 
     # Body of alphabeta_search starts here:
@@ -41,17 +37,16 @@ def naive_minimax(state, game, spark, d=4, cutoff_test=None, eval_fn=None):
     eval_fn = eval_fn or (lambda st: game.utility(player, st))
     action, state = argmax_random_tie(game.successors(state),
                                       lambda a_s: min_value(a_s[1], 0))
-    print(f"Naive Minimax: explored {stats['nodes']} nodes; max depth {stats['depth']}")
-    return action
+    return action, stats
 
 def parallel_minimax(state, game, spark, d=4, cutoff_test=None, eval_fn=None):
     """Search game to determine best action using Spark for parallelism.
     This version cuts off search and uses an evaluation function."""
     
+    # deserialize move or state from binary representation stored in DataFrame
     def unpack_eval(bin):
         return eval_fn(loads(bin))
 
-    # Body of search starts here:
     # The default test cuts off at depth d or at a terminal st
     player = game.to_move(state)
     cutoff_test = (cutoff_test or
@@ -59,22 +54,23 @@ def parallel_minimax(state, game, spark, d=4, cutoff_test=None, eval_fn=None):
     eval_fn = eval_fn or (lambda st: game.utility(player, st))
 
     stats = {"nodes": 0, "depth": d}
-    # sample_space = spark.sparkContext.parallelize(successors(game, d, stats)).toDF(["move", "state"])
-    # udf_eval = sf.udf(lambda a, b: (a, eval_fn(b)))
 
-    # processed = sample_space.map(udf_eval)
-    # best_row = processed.max(lambda row: row[1])
-    # print(f"Parallel Minimax: explored {stats['nodes']} nodes at depth {d}")
-    # return best_row[0]
-
+    # define schema for DataFrame
     schema = sf.StructType([
             types.StructField("move", types.BinaryType(), True),
             types.StructField("state", types.BinaryType(), False)])
+    
+    # populate DataFrame using successors function to specified depth
     df = spark.createDataFrame(successors(game, d, stats), schema=schema)
+    
+    # define UDF to evaluate states
     udf_eval = sf.udf(unpack_eval, types.FloatType())
-    df = df.withColumns({"state_eval": udf_eval(df["state"])}).select("move", "state_eval")
-    print(f"Parallel Minimax: explored {stats['nodes']} nodes at depth {stats["depth"]}")
-    return loads(df.orderBy(sf.desc("state_eval")).first()["move"])
+    
+    # add new column with evaluated states
+    df = df.withColumns({"state_eval": udf_eval(df["state"])})
+    
+    #compute the best move by selecting the row with the highest evaluation (best for active player, worst for opponent)
+    return loads(df.orderBy(sf.desc("state_eval")).first()["move"]), stats
 
 def successors(game, max_depth, stats, depth=1, move=None):
     state = game.curr_state

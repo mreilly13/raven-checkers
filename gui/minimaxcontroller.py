@@ -1,3 +1,4 @@
+import csv
 import ai.games as games
 import copy
 import multiprocessing
@@ -20,6 +21,8 @@ class MinimaxController(Controller):
         self.process = multiprocessing.Process()
         self._start_time = None
         self._call_id = 0
+        self._search_algorithm = props['search']
+        self._display_metrics = props['display_metrics'] if 'display_metrics' in props else False
 
     def set_before_turn_event(self, evt):
         self._before_turn_event = evt
@@ -42,7 +45,9 @@ class MinimaxController(Controller):
                                                args=(self._model,
                                                      self._search_time,
                                                      self._term_event,
-                                                     self._child_conn))
+                                                     self._child_conn,
+                                                     self._search_algorithm,
+                                                     self._display_metrics))
         self._start_time = time.time()
         self.process.daemon = True
         self.process.start()
@@ -97,13 +102,15 @@ def longest_of(moves):
     return selected
 
 
-def calc_move(model, search_time, term_event, child_conn):
+def calc_move(model, search_time, term_event, child_conn, search_algorithm, display_metrics=False):
     term_event.clear()
     captures = model.captures_available()
+    data = []
     spark_session = SparkSession.builder \
-            .appName("AlphaBetaSearch") \
+            .appName("MinimaxSearch") \
             .config('spark.driver.memory', '8g') \
-            .config('spark.executor.memory', '1g') \
+            .config('spark.executor.memory', '4g') \
+            .config('spark.python.worker.faulthandler.enabled', 'true') \
             .getOrCreate()
     if captures:
         time.sleep(0.7)
@@ -112,23 +119,33 @@ def calc_move(model, search_time, term_event, child_conn):
         depth = 0
         start_time = time.time()
         curr_time = start_time
-        rem_time = search_time
+        elapsed_time = 0
         model_copy = copy.deepcopy(model)
         while 1:
             depth += 1
-            move = parallel_search.parallel_minimax(model_copy.curr_state,
+            move, stats = search_algorithm(model_copy.curr_state,
                                           model_copy,
                                           spark_session,
                                           d=depth)
             checkpoint = curr_time
             curr_time = time.time()
-            rem_time -= curr_time - checkpoint
-            print(rem_time, "remaining after depth", depth)
+            spark_session.catalog.clearCache()
+            elapsed_time += curr_time - checkpoint
+            data.append(round(elapsed_time, 3))
+            if display_metrics:
+                print(f"explored {stats['nodes']} nodes in {round(elapsed_time, 3)}s; max depth {stats['depth']}")
+
             if term_event.is_set():  # a signal means terminate
                 term_event.clear()
                 move = None
+                write_results_to_csv(data)
                 break
-            if rem_time < 0 or depth == 4:
+            if elapsed_time > search_time or depth == 4:
+                write_results_to_csv(data)
                 break
     spark_session.stop()
     child_conn.send(move)
+
+def write_results_to_csv(results, filename="results.csv"):
+    with open(filename, "a") as f:
+        csv.writer(f).writerow(results)
