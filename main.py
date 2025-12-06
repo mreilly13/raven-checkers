@@ -1,3 +1,4 @@
+import sys
 from tkinter import IntVar, Menu, Tk, Image
 from tkinter.messagebox import askyesnocancel
 from multiprocessing import freeze_support
@@ -7,10 +8,11 @@ from gui.setupboard import SetupBoard
 from game.gamemanager import GameManager
 from gui.centeredwindow import CenteredWindow
 from gui.prefdlg import PreferencesDialog
-
+import ai.parallel_search as parallel_search
+from ai.games import alphabeta_search
 
 class MainFrame(CenteredWindow):
-    def __init__(self, master):
+    def __init__(self, master, search, metrics):
         self.root = master
         self.root.withdraw()
         img = Image("photo", file=RAVEN_ICON)
@@ -18,7 +20,7 @@ class MainFrame(CenteredWindow):
         self.root.title('Raven ' + VERSION)
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
         self.thinkTime = IntVar(value=5)
-        self.manager = GameManager(root=self.root, parent=self)
+        self.manager = GameManager(root=self.root, parent=self, search=search, metrics=metrics)
         self.menu_bar = Menu(self.root)
         self.create_game_menu()
         self.create_options_menu()
@@ -176,13 +178,15 @@ class MainFrame(CenteredWindow):
             self.manager.controller2.add_highlights()
 
 
-def start():
+def start(search=parallel_search.naive_minimax, metrics=False):
     root = Tk()
-    mainframe = MainFrame(root)
+    mainframe = MainFrame(root, search, metrics)
     mainframe.root.update()
     mainframe.root.mainloop()
 
 
 if __name__ == '__main__':
     freeze_support()
-    start()
+    search = parallel_search.parallel_minimax if '-p' in sys.argv else parallel_search.naive_minimax
+    metrics = True if '-m' in sys.argv else False
+    start(search, metrics)

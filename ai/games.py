@@ -71,7 +71,7 @@ def alphabeta_full_search(state, game):
     return action
 
 
-def alphabeta_search(state, game, d=4, cutoff_test=None, eval_fn=None):
+def alphabeta_search(state, game, spark, d=4, cutoff_test=None, eval_fn=None):
     """Search game to determine best action; use alpha-beta pruning.
     This version cuts off search and uses an evaluation function."""
     player = game.to_move(state)
@@ -109,7 +109,7 @@ def alphabeta_search(state, game, d=4, cutoff_test=None, eval_fn=None):
     eval_fn = eval_fn or (lambda st: game.utility(player, st))
     action, state = argmax_random_tie(game.successors(state),
                                       lambda a_s: min_value(a_s[1], -infinity, infinity, 0))
-    return action
+    return action, None
 
 
 # Players for Games

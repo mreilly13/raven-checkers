@@ -9,3 +9,7 @@ raven.ini
 *.pyc
 pdm.lock
 .python-version
+
+*.png
+*.csv
+graphing.py
